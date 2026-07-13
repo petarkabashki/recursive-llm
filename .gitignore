@@ -133,8 +133,9 @@ dmypy.json
 .DS_Store
 Thumbs.db
 
-# Benchmarks (internal testing, not for distribution)
-benchmarks/
+# Benchmarks (ignore generated artifacts, keep reproducible scripts)
+benchmarks/*
+!benchmarks/compare_same_model.py
 
 # Internal documentation (development notes, not for distribution)
 docs/

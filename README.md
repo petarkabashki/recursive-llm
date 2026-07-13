@@ -68,13 +68,68 @@ result = rlm.complete(
 print(result)
 ```
 
-## API Keys Setup
+### Usage and Cost Statistics
 
-Set your API key via environment variable or pass it directly:
+`RLM.stats` aggregates model calls across the complete recursion tree. Token usage comes from
+provider responses, while cost is calculated on a best-effort basis using LiteLLM's model pricing
+metadata.
+
+```python
+rlm = RLM(
+    model="gpt-5-mini",
+    recursive_model="deepseek/deepseek-v4-flash",
+)
+result = rlm.complete(query="Summarize this", context=document)
+
+print(rlm.stats)
+# {
+#     "llm_calls": 11,
+#     "root_calls": 3,
+#     "recursive_calls": 8,
+#     "prompt_tokens": 12500,
+#     "completion_tokens": 3200,
+#     "cached_tokens": 6000,
+#     "estimated_cost_usd": 0.0047,
+#     "by_model": {
+#         "gpt-5-mini": {"calls": 3, ...},
+#         "deepseek/deepseek-v4-flash": {"calls": 8, ...},
+#     },
+# }
+```
+
+`estimated_cost_usd` is `None` when LiteLLM has no pricing metadata for any completed call. Compare
+`priced_calls` with `llm_calls` before treating the estimate as the full run cost.
+
+### Live Model Comparison
+
+The comparison script uses the same model for both root and recursive calls. It runs one small
+recursive smoke test by default and reports latency, calls, tokens, and estimated cost:
 
 ```bash
-export OPENAI_API_KEY="sk-..."  # or ANTHROPIC_API_KEY, etc.
+python benchmarks/compare_same_model.py gpt-5-mini
+python benchmarks/compare_same_model.py deepseek/deepseek-v4-flash
 ```
+
+Use `--full` for the slower two-task suite. Live benchmarks make paid API calls and require the
+corresponding provider keys.
+
+## API Keys Setup
+
+Copy the example environment file and add keys only for the providers you use:
+
+```bash
+cp .env.example .env
+```
+
+```dotenv
+OPENAI_API_KEY=sk-...
+DEEPSEEK_API_KEY=...
+MOONSHOT_API_KEY=...
+```
+
+Use the LiteLLM provider prefix for non-OpenAI models, for example
+`deepseek/deepseek-v4-flash` or `moonshot/kimi-k2.6`. This lets a hybrid RLM select the correct API
+key for each model automatically.
 
 Or pass directly in code:
 ```python
@@ -264,7 +319,10 @@ Built on top of LiteLLM for universal LLM support.
 - Check if the model is getting stuck in a loop
 
 ### "API key not found"
-- Set the appropriate environment variable (e.g., `OPENAI_API_KEY`)
+- Copy `.env.example` to `.env` and set the appropriate provider variable:
+  - `OPENAI_API_KEY` for OpenAI
+  - `DEEPSEEK_API_KEY` for DeepSeek
+  - `MOONSHOT_API_KEY` for Kimi
 - Or pass `api_key` parameter to RLM constructor
 
 ### "Model not found"

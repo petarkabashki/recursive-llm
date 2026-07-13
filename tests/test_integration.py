@@ -7,27 +7,26 @@ from rlm import RLM
 
 class MockResponse:
     """Mock LLM response."""
+
     def __init__(self, content):
         self.choices = [MagicMock(message=MagicMock(content=content))]
-
-
 
 
 @pytest.mark.asyncio
 async def test_peek_strategy():
     """Test peeking at context start."""
     responses = [
-        MockResponse('peek = context[:50]'),
-        MockResponse('FINAL_VAR(peek)'),
+        MockResponse("peek = context[:50]"),
+        MockResponse("FINAL_VAR(peek)"),
     ]
 
-    with patch('rlm.core.litellm.acompletion') as mock:
+    with patch("rlm.core.litellm.acompletion") as mock:
         mock.side_effect = responses
 
         rlm = RLM(model="test-model")
         result = await rlm.acomplete(
             "What does the context start with?",
-            "This is a long document that starts with this sentence..."
+            "This is a long document that starts with this sentence...",
         )
 
         assert "This is a long document" in result
@@ -38,16 +37,15 @@ async def test_search_strategy():
     """Test regex search strategy."""
     responses = [
         MockResponse('matches = re.findall(r"\\d{4}", context)'),
-        MockResponse('FINAL_VAR(matches)'),
+        MockResponse("FINAL_VAR(matches)"),
     ]
 
-    with patch('rlm.core.litellm.acompletion') as mock:
+    with patch("rlm.core.litellm.acompletion") as mock:
         mock.side_effect = responses
 
         rlm = RLM(model="test-model")
         result = await rlm.acomplete(
-            "Find all years",
-            "The years 2020, 2021, and 2022 were important."
+            "Find all years", "The years 2020, 2021, and 2022 were important."
         )
 
         assert "2020" in result
@@ -57,17 +55,16 @@ async def test_search_strategy():
 async def test_chunk_strategy():
     """Test chunking context."""
     responses = [
-        MockResponse('chunks = [context[i:i+10] for i in range(0, len(context), 10)]\nnum_chunks = len(chunks)'),
-        MockResponse('FINAL_VAR(num_chunks)'),
+        MockResponse(
+            "chunks = [context[i:i+10] for i in range(0, len(context), 10)]\nnum_chunks = len(chunks)"
+        ),
+        MockResponse("FINAL_VAR(num_chunks)"),
     ]
 
-    with patch('rlm.core.litellm.acompletion') as mock:
+    with patch("rlm.core.litellm.acompletion") as mock:
         mock.side_effect = responses
         rlm = RLM(model="test-model")
-        result = await rlm.acomplete(
-            "Chunk the context",
-            "A" * 50  # 50 chars -> 5 chunks of 10
-        )
+        result = await rlm.acomplete("Chunk the context", "A" * 50)  # 50 chars -> 5 chunks of 10
 
         assert "5" in result
 
@@ -76,11 +73,13 @@ async def test_chunk_strategy():
 async def test_extraction_strategy():
     """Test data extraction."""
     responses = [
-        MockResponse('lines = context.split("\\n")\nnames = [l for l in lines if "Name:" in l]\nprint(names)'),
-        MockResponse('FINAL_VAR(names)'),
+        MockResponse(
+            'lines = context.split("\\n")\nnames = [l for l in lines if "Name:" in l]\nprint(names)'
+        ),
+        MockResponse("FINAL_VAR(names)"),
     ]
 
-    with patch('rlm.core.litellm.acompletion') as mock:
+    with patch("rlm.core.litellm.acompletion") as mock:
         mock.side_effect = responses
         rlm = RLM(model="test-model")
         context = """
@@ -98,12 +97,12 @@ Age: 25
 async def test_error_recovery():
     """Test recovery from REPL errors."""
     responses = [
-        MockResponse('x = undefined_variable'),  # Will cause error
+        MockResponse("x = undefined_variable"),  # Will cause error
         MockResponse('x = "recovered"\nprint(x)'),
         MockResponse('FINAL("Error recovered")'),
     ]
 
-    with patch('rlm.core.litellm.acompletion') as mock:
+    with patch("rlm.core.litellm.acompletion") as mock:
         mock.side_effect = responses
         rlm = RLM(model="test-model")
         result = await rlm.acomplete("Test", "Context")
@@ -115,11 +114,11 @@ async def test_error_recovery():
 async def test_long_context():
     """Test with long context."""
     responses = [
-        MockResponse('length = len(context)'),
-        MockResponse('FINAL_VAR(length)'),
+        MockResponse("length = len(context)"),
+        MockResponse("FINAL_VAR(length)"),
     ]
 
-    with patch('rlm.core.litellm.acompletion') as mock:
+    with patch("rlm.core.litellm.acompletion") as mock:
         mock.side_effect = responses
         rlm = RLM(model="test-model")
         long_context = "A" * 100000  # 100k chars
@@ -135,7 +134,7 @@ async def test_multiline_answer():
         MockResponse('FINAL("""Line 1\nLine 2\nLine 3""")'),
     ]
 
-    with patch('rlm.core.litellm.acompletion') as mock:
+    with patch("rlm.core.litellm.acompletion") as mock:
         mock.side_effect = responses
         rlm = RLM(model="test-model")
         result = await rlm.acomplete("Test", "Context")
@@ -147,7 +146,7 @@ async def test_multiline_answer():
 @pytest.mark.asyncio
 async def test_context_not_in_prompt():
     """Test that context is not passed in messages."""
-    with patch('rlm.core.litellm.acompletion') as mock:
+    with patch("rlm.core.litellm.acompletion") as mock:
         mock.return_value = MockResponse('FINAL("Done")')
 
         rlm = RLM(model="test-model")
@@ -156,8 +155,8 @@ async def test_context_not_in_prompt():
 
         # Check that context is not in any message
         call_args = mock.call_args[1]
-        messages = call_args['messages']
+        messages = call_args["messages"]
 
         for msg in messages:
             # Context should not be in the message content
-            assert context not in msg['content']
+            assert context not in msg["content"]

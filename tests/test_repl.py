@@ -14,32 +14,29 @@ def repl():
 def test_simple_expression(repl):
     """Test simple expression."""
     env = {}
-    result = repl.execute("x = 5 + 3", env)
-    assert env['x'] == 8
+    repl.execute("x = 5 + 3", env)
+    assert env["x"] == 8
 
 
 def test_string_operations(repl):
     """Test string operations on context."""
-    env = {'context': 'Hello World'}
-    result = repl.execute("result = context[:5]", env)
-    assert env['result'] == 'Hello'
+    env = {"context": "Hello World"}
+    repl.execute("result = context[:5]", env)
+    assert env["result"] == "Hello"
 
 
 def test_regex_operations(repl):
     """Test regex operations."""
-    env = {
-        'context': 'The year is 2025',
-        're': re
-    }
-    result = repl.execute("matches = re.findall(r'\\d+', context)", env)
-    assert env['matches'] == ['2025']
+    env = {"context": "The year is 2025", "re": re}
+    repl.execute("matches = re.findall(r'\\d+', context)", env)
+    assert env["matches"] == ["2025"]
 
 
 def test_print_output(repl):
     """Test capturing print output."""
     env = {}
     result = repl.execute("print('Hello')", env)
-    assert 'Hello' in result
+    assert "Hello" in result
 
 
 def test_multiline_code(repl):
@@ -52,7 +49,7 @@ print(z)
 """
     env = {}
     result = repl.execute(code, env)
-    assert '30' in result
+    assert "30" in result
 
 
 def test_code_block_extraction(repl):
@@ -65,15 +62,15 @@ print(x)
 ```
 """
     env = {}
-    result = repl.execute(text, env)
-    assert env['x'] == 5
+    repl.execute(text, env)
+    assert env["x"] == 5
 
 
 def test_list_operations(repl):
     """Test list operations."""
     env = {}
-    result = repl.execute("items = [1, 2, 3, 4, 5]", env)
-    assert env['items'] == [1, 2, 3, 4, 5]
+    repl.execute("items = [1, 2, 3, 4, 5]", env)
+    assert env["items"] == [1, 2, 3, 4, 5]
 
 
 def test_forbidden_import(repl):
@@ -86,15 +83,15 @@ def test_forbidden_import(repl):
 def test_safe_builtins(repl):
     """Test safe built-in functions."""
     env = {}
-    result = repl.execute("result = len([1, 2, 3])", env)
-    assert env['result'] == 3
+    repl.execute("result = len([1, 2, 3])", env)
+    assert env["result"] == 3
 
 
 def test_comprehension(repl):
     """Test list comprehension."""
-    env = {'context': 'Hello World'}
-    result = repl.execute("chars = [c for c in context if c.isupper()]", env)
-    assert env['chars'] == ['H', 'W']
+    env = {"context": "Hello World"}
+    repl.execute("chars = [c for c in context if c.isupper()]", env)
+    assert env["chars"] == ["H", "W"]
 
 
 def test_empty_code(repl):

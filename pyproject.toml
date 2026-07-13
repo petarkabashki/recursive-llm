@@ -35,7 +35,7 @@ dev = [
     "pytest-cov>=4.0.0",
     "black>=24.0.0",
     "ruff>=0.1.0",
-    "mypy>=1.0.0",
+    "mypy>=1.0.0,<2.0.0",
 ]
 
 [project.urls]
@@ -68,3 +68,7 @@ python_version = "3.9"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "litellm"
+follow_imports = "skip"
