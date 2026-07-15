@@ -248,10 +248,12 @@ def _make_callback_proxy(connection: Connection, name: str) -> Callable[..., Any
     return proxy
 
 
-def _snapshot_environment(env: Dict[str, Any], callback_names: Set[str]) -> Dict[str, Any]:
+def _snapshot_environment(
+    env: Dict[str, Any], callback_names: Set[str], runtime_names: Set[str]
+) -> Dict[str, Any]:
     """Copy ordinary user variables back to the parent process."""
     snapshot: Dict[str, Any] = {}
-    excluded = _RESERVED_NAMES | callback_names
+    excluded = _RESERVED_NAMES | callback_names | runtime_names
     for name, value in env.items():
         if name.startswith("_") or name in excluded or isinstance(value, ModuleType):
             continue
@@ -260,7 +262,7 @@ def _snapshot_environment(env: Dict[str, Any], callback_names: Set[str]) -> Dict
     return snapshot
 
 
-def _execute_code(code: str, env: Dict[str, Any], globals_: Dict[str, Any]) -> str:
+def _execute_code(code: str, env: Dict[str, Any]) -> str:
     """Execute one step and evaluate its final expression exactly once."""
     try:
         tree = ast.parse(code, mode="exec")
@@ -285,7 +287,9 @@ def _execute_code(code: str, env: Dict[str, Any], globals_: Dict[str, Any]) -> s
     if compiled.code is None:
         raise REPLError("Compilation did not produce executable code")
 
-    exec(compiled.code, globals_, env)
+    # A single namespace preserves normal Python lookup semantics inside nested
+    # scopes such as comprehensions on every supported Python version.
+    exec(compiled.code, env, env)
 
     output = ""
     collector = env.get("_print")
@@ -312,8 +316,9 @@ def _worker_main(
         connection.send({"type": "startup_error", "error": str(exc)})
         connection.close()
         return
-    globals_ = _build_globals()
-    env = dict(initial_env)
+    env = _build_globals()
+    runtime_names = set(env)
+    env.update(initial_env)
     env.setdefault("answer", {"content": "", "ready": False})
     for name in callback_names:
         env[name] = _make_callback_proxy(connection, name)
@@ -322,7 +327,7 @@ def _worker_main(
         return {
             name: type(value).__name__
             for name, value in env.items()
-            if not name.startswith("_") and name not in callback_names
+            if not name.startswith("_") and name not in callback_names and name not in runtime_names
         }
 
     env["SHOW_VARS"] = show_vars
@@ -354,7 +359,7 @@ def _worker_main(
 
         env.pop("_print", None)
         try:
-            output = _execute_code(str(message.get("code", "")), env, globals_)
+            output = _execute_code(str(message.get("code", "")), env)
             if len(output) > max_output_chars:
                 output = (
                     f"{output[:max_output_chars]}\n\n"
@@ -369,7 +374,7 @@ def _worker_main(
                 {
                     "type": "result",
                     "output": output,
-                    "snapshot": _snapshot_environment(env, callback_names),
+                    "snapshot": _snapshot_environment(env, callback_names, runtime_names),
                     "final_answer": final_answer,
                 }
             )
@@ -379,7 +384,7 @@ def _worker_main(
                     {
                         "type": "error",
                         "error": str(exc),
-                        "snapshot": _snapshot_environment(env, callback_names),
+                        "snapshot": _snapshot_environment(env, callback_names, runtime_names),
                     }
                 )
             except (BrokenPipeError, EOFError, OSError):

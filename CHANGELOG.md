@@ -30,7 +30,9 @@ All notable changes to this project are documented in this file.
   output, restricted imports, and ordered bounded-concurrency subcalls.
 - Aggregated usage and best-effort cost statistics across the complete recursion tree.
 - Updated repository, installation, citation, release, and issue links to `grishahq/recursive-llm`.
-- Expanded the test suite from 43 initial-release tests to 133 tests with enforced branch coverage.
+- Pinned the formatter to a Python 3.9-compatible version and updated GitHub Actions to Node 24-based
+  releases for reproducible, warning-free CI runs.
+- Expanded the test suite from 43 initial-release tests to 135 tests with enforced branch coverage.
 
 ### Fixed
 
@@ -38,6 +40,8 @@ All notable changes to this project are documented in this file.
   occurrences embedded in arbitrary text.
 - Prevented models from guessing context contents before inspecting the REPL context.
 - Corrected parameter handling for GPT-5-family models.
+- Made persistent REPL variables visible inside comprehension bodies on Python 3.9-3.11 while
+  keeping restricted runtime helpers out of parent snapshots.
 - Prevented REPL worker pipe errors from leaking tracebacks during budget-triggered shutdown.
 - Corrected offline-demo aggregation and strengthened benchmark numeric-boundary grading.
 

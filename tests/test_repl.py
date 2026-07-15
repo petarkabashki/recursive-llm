@@ -116,6 +116,28 @@ def test_comprehension(repl):
     assert env["chars"] == ["H", "W"]
 
 
+def test_comprehension_body_can_access_repl_variables(repl):
+    """Nested comprehension scopes must see persistent REPL variables."""
+    env = {"context": "abcdefghij"}
+
+    repl.execute(
+        "chunks = [context[i:i+2] for i in range(0, len(context), 2)]",
+        env,
+    )
+
+    assert env["chunks"] == ["ab", "cd", "ef", "gh", "ij"]
+
+
+def test_runtime_helpers_stay_out_of_parent_snapshot(repl):
+    """The unified namespace must not expose worker runtime helpers as user state."""
+    env = {}
+
+    repl.execute("meaning = len([40, 2])", env)
+
+    assert env == {"meaning": 2}
+    assert "len" not in repl.execute("SHOW_VARS()", env)
+
+
 def test_empty_code(repl):
     """Test empty code."""
     env = {}
