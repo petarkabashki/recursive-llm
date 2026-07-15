@@ -8,6 +8,7 @@ import multiprocessing
 import pickle
 import threading
 import time
+from dataclasses import dataclass
 from multiprocessing.connection import Connection
 from multiprocessing.process import BaseProcess
 from types import ModuleType
@@ -26,6 +27,13 @@ from RestrictedPython.Guards import (
 )
 from RestrictedPython.PrintCollector import PrintCollector
 
+try:
+    import resource as resource_module
+except ImportError:  # pragma: no cover - exercised by the Windows CI job
+    resource_module = None  # type: ignore[assignment]
+
+_resource: Any = resource_module
+
 
 class REPLError(Exception):
     """Error during REPL execution."""
@@ -33,6 +41,58 @@ class REPLError(Exception):
 
 class REPLTimeoutError(REPLError):
     """A REPL step exceeded its local execution budget."""
+
+
+@dataclass(frozen=True)
+class WorkerResourceLimits:
+    """Optional operating-system limits applied inside the REPL worker."""
+
+    memory_mb: Optional[int] = None
+    cpu_time_seconds: Optional[int] = None
+    max_open_files: Optional[int] = None
+
+    def __post_init__(self) -> None:
+        for name, value in (
+            ("memory_mb", self.memory_mb),
+            ("cpu_time_seconds", self.cpu_time_seconds),
+            ("max_open_files", self.max_open_files),
+        ):
+            if value is not None and value <= 0:
+                raise ValueError(f"{name} must be greater than zero when provided")
+        if self.max_open_files is not None and self.max_open_files < 16:
+            raise ValueError("max_open_files must be at least 16 when provided")
+
+    @property
+    def configured(self) -> bool:
+        """Return whether at least one operating-system limit is set."""
+        return any(
+            value is not None
+            for value in (self.memory_mb, self.cpu_time_seconds, self.max_open_files)
+        )
+
+
+def _apply_resource_limits(limits: WorkerResourceLimits) -> None:
+    """Apply configured POSIX limits in the disposable worker process."""
+    if not limits.configured:
+        return
+    if _resource is None:
+        raise RuntimeError("REPL worker resource limits are unavailable on this platform")
+
+    def set_limit(kind_name: str, value: int) -> None:
+        kind = getattr(_resource, kind_name, None)
+        if kind is None:
+            raise RuntimeError(f"{kind_name} is unavailable on this platform")
+        _soft, hard = _resource.getrlimit(kind)
+        infinity = _resource.RLIM_INFINITY
+        target = value if hard == infinity else min(value, hard)
+        _resource.setrlimit(kind, (target, target))
+
+    if limits.memory_mb is not None:
+        set_limit("RLIMIT_AS", limits.memory_mb * 1024 * 1024)
+    if limits.cpu_time_seconds is not None:
+        set_limit("RLIMIT_CPU", limits.cpu_time_seconds)
+    if limits.max_open_files is not None:
+        set_limit("RLIMIT_NOFILE", limits.max_open_files)
 
 
 _RESULT_NAME = "rlm_internal_last_result"
@@ -243,8 +303,15 @@ def _worker_main(
     initial_env: Dict[str, Any],
     callback_names: Set[str],
     max_output_chars: int,
+    resource_limits: WorkerResourceLimits,
 ) -> None:
     """Serve execution requests while preserving state between REPL steps."""
+    try:
+        _apply_resource_limits(resource_limits)
+    except BaseException as exc:
+        connection.send({"type": "startup_error", "error": str(exc)})
+        connection.close()
+        return
     globals_ = _build_globals()
     env = dict(initial_env)
     env.setdefault("answer", {"content": "", "ready": False})
@@ -307,13 +374,16 @@ def _worker_main(
                 }
             )
         except BaseException as exc:
-            connection.send(
-                {
-                    "type": "error",
-                    "error": str(exc),
-                    "snapshot": _snapshot_environment(env, callback_names),
-                }
-            )
+            try:
+                connection.send(
+                    {
+                        "type": "error",
+                        "error": str(exc),
+                        "snapshot": _snapshot_environment(env, callback_names),
+                    }
+                )
+            except (BrokenPipeError, EOFError, OSError):
+                break
 
     connection.close()
 
@@ -321,7 +391,12 @@ def _worker_main(
 class REPLExecutor:
     """Persistent restricted Python executor backed by an isolated worker process."""
 
-    def __init__(self, timeout: float = 5, max_output_chars: int = 2000):
+    def __init__(
+        self,
+        timeout: float = 5,
+        max_output_chars: int = 2000,
+        resource_limits: Optional[WorkerResourceLimits] = None,
+    ):
         """Initialize the executor with a hard local-code timeout."""
         if timeout <= 0:
             raise ValueError("timeout must be greater than zero")
@@ -329,6 +404,7 @@ class REPLExecutor:
             raise ValueError("max_output_chars must be greater than zero")
         self.timeout = float(timeout)
         self.max_output_chars = max_output_chars
+        self.resource_limits = resource_limits or WorkerResourceLimits()
         self._process: Optional[BaseProcess] = None
         self._connection: Optional[Connection] = None
         self._callbacks: Dict[str, Callable[..., Any]] = {}
@@ -405,7 +481,13 @@ class REPLExecutor:
         parent_connection, child_connection = multiprocessing.get_context("spawn").Pipe()
         process = multiprocessing.get_context("spawn").Process(
             target=_worker_main,
-            args=(child_connection, initial_env, set(callbacks), self.max_output_chars),
+            args=(
+                child_connection,
+                initial_env,
+                set(callbacks),
+                self.max_output_chars,
+                self.resource_limits,
+            ),
             daemon=True,
         )
         process.start()
@@ -421,6 +503,11 @@ class REPLExecutor:
         except (EOFError, OSError) as exc:
             self._terminate_timed_out_worker()
             raise REPLError("REPL worker exited during startup") from exc
+        if ready_message.get("type") == "startup_error":
+            self._terminate_timed_out_worker()
+            raise REPLError(
+                f"REPL worker startup failed: {ready_message.get('error', 'unknown error')}"
+            )
         if ready_message.get("type") != "ready":
             self._terminate_timed_out_worker()
             raise REPLError("REPL worker returned an invalid startup response")
@@ -446,9 +533,7 @@ class REPLExecutor:
             name = str(message.get("name", ""))
             callback = self._callbacks.get(name)
             if callback is None:
-                connection.send(
-                    {"type": "callback_result", "error": f"Unknown callback: {name}"}
-                )
+                connection.send({"type": "callback_result", "error": f"Unknown callback: {name}"})
                 continue
             try:
                 value = callback(*message.get("args", ()), **message.get("kwargs", {}))
@@ -457,6 +542,8 @@ class REPLExecutor:
                 connection.send({"type": "callback_result", "value": value, "error": None})
             except BaseException as exc:
                 connection.send({"type": "callback_result", "value": None, "error": str(exc)})
+                if getattr(exc, "abort_repl", False):
+                    raise
 
         self._terminate_timed_out_worker()
         raise REPLTimeoutError(f"Execution timed out after {budget:g} seconds")

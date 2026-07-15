@@ -3,13 +3,18 @@
 from rlm import RLM
 
 # Very long document
-long_document = """
+long_document = (
+    """
 Annual Financial Report 2024
-""" + "\n\n" + """
+"""
+    + "\n\n"
+    + """
 Executive Summary:
 Our company achieved record revenue of $500M in 2024, representing 25% year-over-year growth.
 Net income reached $75M, with an operating margin of 18%.
-""" + "\n\n" + ("""
+"""
+    + "\n\n"
+    + ("""
 Quarterly Performance:
 Q1 2024: Revenue $110M, Net Income $15M
 Q2 2024: Revenue $120M, Net Income $18M
@@ -22,7 +27,8 @@ Department Breakdown:
 - Marketing: $100M revenue, 50 employees
 - Operations: $50M revenue, 100 employees
 
-""" * 50)  # Repeat to make it very long
+""" * 50)
+)  # Repeat to make it very long
 
 
 def main():
@@ -30,11 +36,11 @@ def main():
     # Use GPT-4o for root decisions, GPT-4o-mini for recursive processing
     # This can significantly reduce costs while maintaining quality
     rlm = RLM(
-        model="gpt-5-mini",                # Root model (expensive, smart)
-        recursive_model="gpt-5-mini", # Recursive model (cheap, fast)
+        model="gpt-5-mini",  # Root model (expensive, smart)
+        recursive_model="gpt-5-mini",  # Recursive model (cheap, fast)
         max_iterations=15,
         max_depth=3,
-        temperature=0.3
+        temperature=0.3,
     )
 
     queries = [
@@ -55,9 +61,11 @@ def main():
             result = rlm.complete(query, long_document)
 
             print(f"Answer: {result}")
-            print(f"Stats: {rlm.stats['llm_calls']} calls, "
-                  f"{rlm.stats['iterations']} iterations, "
-                  f"depth {rlm.stats['depth']}")
+            print(
+                f"Stats: {rlm.stats['llm_calls']} calls, "
+                f"{rlm.stats['iterations']} iterations, "
+                f"depth {rlm.stats['depth']}"
+            )
             print()
 
         except Exception as e:

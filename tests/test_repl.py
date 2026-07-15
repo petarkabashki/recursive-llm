@@ -3,13 +3,17 @@
 import pytest
 import re
 import time
+from unittest.mock import patch
 
 from rlm.repl import (
     REPLError,
     REPLExecutor,
     REPLTimeoutError,
+    WorkerResourceLimits,
+    _apply_resource_limits,
     _extract_code,
     _is_picklable,
+    _resource,
 )
 
 
@@ -261,3 +265,66 @@ def test_helper_edge_cases():
     assert not _is_picklable(lambda: None)
     assert _extract_code("```\nvalue = 1\n```") == "value = 1"
     assert _extract_code("```python\nvalue = 1") == "```python\nvalue = 1"
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"memory_mb": 0},
+        {"cpu_time_seconds": 0},
+        {"max_open_files": 0},
+        {"max_open_files": 15},
+    ],
+)
+def test_invalid_worker_resource_limits_are_rejected(kwargs):
+    """Resource limits must be positive and leave enough worker descriptors."""
+    with pytest.raises(ValueError):
+        WorkerResourceLimits(**kwargs)
+
+
+def test_resource_limit_units_and_kinds_are_applied():
+    """Configured limits must map to the expected POSIX setrlimit calls."""
+
+    class FakeResource:
+        RLIM_INFINITY = -1
+        RLIMIT_AS = 1
+        RLIMIT_CPU = 2
+        RLIMIT_NOFILE = 3
+
+        def __init__(self):
+            self.calls = []
+
+        def getrlimit(self, _kind):
+            return (-1, self.RLIM_INFINITY)
+
+        def setrlimit(self, kind, limits):
+            self.calls.append((kind, limits))
+
+    fake = FakeResource()
+    with patch("rlm.repl._resource", fake):
+        _apply_resource_limits(
+            WorkerResourceLimits(memory_mb=128, cpu_time_seconds=3, max_open_files=64)
+        )
+
+    assert fake.calls == [
+        (fake.RLIMIT_AS, (128 * 1024 * 1024, 128 * 1024 * 1024)),
+        (fake.RLIMIT_CPU, (3, 3)),
+        (fake.RLIMIT_NOFILE, (64, 64)),
+    ]
+
+
+def test_configured_limits_fail_explicitly_when_platform_support_is_missing():
+    """Unsupported resource limits must never be silently ignored."""
+    with patch("rlm.repl._resource", None):
+        with pytest.raises(RuntimeError, match="unavailable"):
+            _apply_resource_limits(WorkerResourceLimits(max_open_files=64))
+
+
+@pytest.mark.skipif(_resource is None, reason="POSIX setrlimit is unavailable")
+def test_open_file_limit_allows_normal_worker_execution():
+    """A practical descriptor limit should preserve ordinary REPL behavior."""
+    executor = REPLExecutor(resource_limits=WorkerResourceLimits(max_open_files=64))
+    try:
+        assert executor.execute("6 * 7", {}) == "42"
+    finally:
+        executor.close()

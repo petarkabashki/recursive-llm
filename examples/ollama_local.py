@@ -36,11 +36,7 @@ def main():
     # Initialize RLM with Ollama
     # Make sure Ollama is running: ollama serve
     # And you have a model installed: ollama pull llama3.2
-    rlm = RLM(
-        model="ollama/llama3.2",
-        max_iterations=10,
-        temperature=0.5
-    )
+    rlm = RLM(model="ollama/llama3.2", max_iterations=10, temperature=0.5)
 
     # Ask questions
     queries = [
@@ -57,8 +53,10 @@ def main():
         try:
             result = rlm.complete(query, document)
             print(f"Answer: {result}")
-            print(f"Stats: {rlm.stats['llm_calls']} LLM calls, "
-                  f"{rlm.stats['iterations']} iterations\n")
+            print(
+                f"Stats: {rlm.stats['llm_calls']} LLM calls, "
+                f"{rlm.stats['iterations']} iterations\n"
+            )
 
         except Exception as e:
             print(f"Error: {e}\n")

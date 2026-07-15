@@ -18,5 +18,5 @@ def test_demo_script_runs_from_the_repository_root() -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert "Total revenue: $13.2M" in result.stdout
+    assert "Total revenue: $6.6M" in result.stdout
     assert "Extracted answer: The total revenue is $6.6M" in result.stdout

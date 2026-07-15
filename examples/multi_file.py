@@ -26,7 +26,6 @@ Features:
 - Cross-platform support (Windows, Mac, Linux)
 - 2GB free storage, upgrade to 1TB for $9.99/month
 """,
-
     "troubleshooting.txt": """
 Troubleshooting Guide - CloudSync Pro
 
@@ -48,7 +47,6 @@ Issue: Login failed
 Solution: Reset password at cloudsync.com/reset. Check if Caps Lock is on.
 Contact support@cloudsync.com if you can't access your account.
 """,
-
     "pricing.txt": """
 CloudSync Pro - Pricing Plans
 
@@ -79,7 +77,7 @@ Business Plan:
 Education Discount:
 - 50% off Premium for students/teachers
 - Verify with .edu email address
-"""
+""",
 }
 
 
@@ -87,18 +85,13 @@ def main():
     """Process multiple documents."""
     # Combine all documents
     combined = "\n\n--- FILE: " + "\n\n--- FILE: ".join(
-        f"{name} ---\n{content}"
-        for name, content in documents.items()
+        f"{name} ---\n{content}" for name, content in documents.items()
     )
 
     print(f"Processing {len(documents)} documents")
     print(f"Total size: {len(combined):,} characters\n")
 
-    rlm = RLM(
-        model="gpt-5-mini",
-        max_iterations=15,
-        temperature=0.5
-    )
+    rlm = RLM(model="gpt-5-mini", max_iterations=15, temperature=0.5)
 
     # Questions that require information from multiple documents
     queries = [

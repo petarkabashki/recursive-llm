@@ -42,7 +42,7 @@ def main():
     rlm = RLM(
         model="gpt-5-mini",
         max_iterations=15,
-        temperature=0.3  # Lower temp for more precise extraction
+        temperature=0.3,  # Lower temp for more precise extraction
     )
 
     # Different extraction tasks

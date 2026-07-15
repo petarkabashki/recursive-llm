@@ -8,8 +8,7 @@ def build_system_prompt(context_size: int, depth: int = 0, max_depth: int = 1) -
         depth_note = "No subcalls are available."
     else:
         recursive_api = (
-            "- recursive_llm(sub_query, sub_context) -> str "
-            "(recursively process sub-context)"
+            "- recursive_llm(sub_query, sub_context) -> str " "(recursively process sub-context)"
         )
         if depth + 1 >= max_depth:
             depth_note = "recursive_llm makes one plain LM call at this boundary."

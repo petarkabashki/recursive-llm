@@ -17,7 +17,7 @@ def setup_env():
     if env_file.exists():
         print("⚠️  .env file already exists!")
         response = input("Do you want to overwrite it? (y/N): ")
-        if response.lower() != 'y':
+        if response.lower() != "y":
             print("Cancelled.")
             return
         print()
@@ -39,7 +39,7 @@ def setup_env():
         azure_base = input("Azure API Base URL: ").strip()
 
     # Write .env file
-    with open(env_file, 'w') as f:
+    with open(env_file, "w") as f:
         f.write("# OpenAI API Key\n")
         f.write(f"OPENAI_API_KEY={openai_key}\n")
         f.write("\n")
@@ -99,7 +99,9 @@ def test_env():
         print("❌ OPENAI_API_KEY: Not set")
 
     if anthropic_key:
-        masked = anthropic_key[:7] + "..." + anthropic_key[-4:] if len(anthropic_key) > 11 else "***"
+        masked = (
+            anthropic_key[:7] + "..." + anthropic_key[-4:] if len(anthropic_key) > 11 else "***"
+        )
         print(f"✅ ANTHROPIC_API_KEY: {masked}")
     else:
         print("⚠️  ANTHROPIC_API_KEY: Not set (optional)")

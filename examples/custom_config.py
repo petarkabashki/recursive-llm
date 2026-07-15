@@ -43,11 +43,7 @@ async def async_example():
     """Example using async API for better performance."""
     print("Async Example\n")
 
-    rlm = RLM(
-        model="gpt-5-mini",
-        max_iterations=10,
-        temperature=0.3
-    )
+    rlm = RLM(model="gpt-5-mini", max_iterations=10, temperature=0.3)
 
     # Process multiple queries in parallel
     queries = [
@@ -78,7 +74,7 @@ def custom_params_example():
         max_tokens=500,
         top_p=0.9,
         timeout=30,
-        num_retries=2
+        num_retries=2,
     )
 
     query = "Describe the storage configuration across all servers"
@@ -97,7 +93,7 @@ def local_model_example():
         model="openai/local",
         api_base="http://localhost:8000/v1",
         max_iterations=10,
-        temperature=0.7
+        temperature=0.7,
     )
 
     query = "Which server should I use for high-memory workloads?"
@@ -114,20 +110,13 @@ def error_handling_example():
     """Example with error handling."""
     print("\nError Handling Example\n")
 
-    rlm = RLM(
-        model="gpt-5-mini",
-        max_iterations=3,  # Very low to trigger timeout
-        max_depth=2
-    )
+    rlm = RLM(model="gpt-5-mini", max_iterations=3, max_depth=2)  # Very low to trigger timeout
 
     from rlm import MaxIterationsError, MaxDepthError
 
     try:
         # This might exceed iterations
-        result = rlm.complete(
-            "Perform detailed analysis of all servers",
-            context
-        )
+        result = rlm.complete("Perform detailed analysis of all servers", context)
         print(f"Result: {result}")
 
     except MaxIterationsError as e:
@@ -146,10 +135,7 @@ def stats_example():
     """Example tracking statistics."""
     print("\nStatistics Tracking Example\n")
 
-    rlm = RLM(
-        model="gpt-5-mini",
-        max_iterations=15
-    )
+    rlm = RLM(model="gpt-5-mini", max_iterations=15)
 
     query = "Compare CPU specs across all servers"
     result = rlm.complete(query, context)

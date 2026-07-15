@@ -106,9 +106,27 @@ print(rlm.stats)
 # }
 ```
 
-Statistics are reset when a new root completion starts, so they describe the latest recursion tree.
+Each root completion receives fresh statistics, so they describe one recursion tree rather than
+lifetime usage.
 `estimated_cost_usd` is `None` when LiteLLM has no pricing metadata for any completed call. Compare
 `priced_calls` with `llm_calls` before treating the estimate as the full run cost.
+
+When the same `RLM` instance runs concurrent completions, `RLM.stats` describes whichever root run
+completed most recently. Use the structured result API for exact per-run statistics and trajectory:
+
+```python
+result = rlm.complete_result(query="Summarize this", context=document)
+print(result.answer)
+print(result.stats)
+for event in result.trajectory:
+    print(event.kind, event.depth, event.node_id, event.parent_id)
+```
+
+`acomplete_result` is the asynchronous equivalent. Trajectories include the complete root, child
+RLM, and leaf-call tree. Query, context, model response, code, and output content are represented by
+character counts by default. Set `capture_trajectory_content=True` only when the resulting logs are
+allowed to contain that data. An optional `event_handler` receives events as they occur; handler
+failures do not interrupt model completion.
 
 ### Live Model Comparison
 
@@ -120,8 +138,20 @@ python benchmarks/compare_same_model.py gpt-5-mini
 python benchmarks/compare_same_model.py deepseek/deepseek-v4-flash
 ```
 
-Use `--full` for the slower two-task suite. Live benchmarks make paid API calls and require the
-corresponding provider keys.
+Use repeated runs and save raw records before comparing configurations:
+
+```bash
+python benchmarks/compare_same_model.py gpt-5-mini --full --runs 3 --jsonl results.jsonl
+python benchmarks/compare_same_model.py gpt-5-mini --full --runs 3 --mode direct
+python benchmarks/compare_same_model.py gpt-5-mini --generated-chars 100000 --seed 2026
+```
+
+`--max-depth` compares recursion capabilities; `--mode direct` sends task and context in one normal
+long-context model request. The script reports pass rate, p50/p95 latency, calls, tokens, and
+best-effort cost. Task-specific graders require exact IDs, numeric boundaries, and explicit labeled
+counts rather than accepting arbitrary substrings. Live benchmarks make paid API calls and require
+the corresponding provider keys. `--trace` includes sensitive content-bearing trajectories in the
+JSON output and should be used deliberately.
 
 ## API Keys Setup
 
@@ -214,9 +244,19 @@ rlm = RLM(
     repl_timeout=5,              # Hard timeout for each local Python step
     max_output_chars=2000,       # Observation truncation limit
     max_concurrent_subcalls=4,   # Bound batch concurrency
+    max_total_calls=24,          # Exact provider-call cap for the full recursion tree
+    max_total_tokens=100_000,    # Stop after reported usage crosses this value
+    max_total_cost_usd=0.10,     # Stop after reported cost crosses this value
+    max_elapsed_seconds=300,     # Deadline shared by root and child calls
     # Optional LiteLLM params: temperature, timeout, etc.
 )
 ```
+
+Call limits are reserved atomically before provider requests, including batched and recursive
+subcalls. Token and cost limits are evaluated after each response because providers only report
+those values after generation; the crossing response is included in partial statistics attached to
+`BudgetExceededError`. A deadline also bounds in-flight provider requests. All limits are optional
+and are reset for each root completion.
 
 `max_depth` is an explicit constructor option so that runs remain reproducible. It is not read from
 an environment variable by the library. Applications may map their own configuration or environment
@@ -279,6 +319,22 @@ local code is terminated by `repl_timeout`. Time spent waiting for model subcall
 the local Python timeout. Imports are limited to the already exposed `re`, `json`, `math`,
 `datetime`, and `collections` helpers; arbitrary modules remain blocked.
 
+POSIX deployments may also opt in to worker-process limits:
+
+```python
+rlm = RLM(
+    model="gpt-5-mini",
+    repl_memory_limit_mb=512,
+    repl_cpu_time_limit_seconds=10,
+    repl_max_open_files=64,
+)
+```
+
+These values depend on the runtime and workload, so the library does not guess defaults. A
+configured limit that the platform cannot enforce fails worker startup explicitly. RestrictedPython
+and a subprocess are defense-in-depth controls, not a security boundary for hostile code; read
+[SECURITY.md](SECURITY.md) before processing untrusted prompts or contexts.
+
 ## Examples
 
 See the `examples/` directory for complete working examples:
@@ -310,9 +366,10 @@ On OOLONG benchmark (132k tokens):
 ### Reproducible Project Benchmark
 
 `benchmarks/compare_same_model.py` contains deterministic structured contexts with exact expected
-answers. Use `--full` to run both tasks. Model outputs remain stochastic, so compare several runs
-before drawing quality conclusions; the script reports accuracy, latency, calls, tokens, and
-best-effort cost for every run.
+answers. `benchmarks/generated_long_context.py` creates byte-reproducible transaction corpora with
+seed, SHA-256 identity, and a computed answer key. Model outputs remain stochastic, so use `--runs`
+and compare pass rate plus p50/p95 latency before drawing quality conclusions. See
+[BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md) for the latest checked-in live comparison.
 
 ## Development
 
@@ -335,13 +392,20 @@ ruff check src tests benchmarks examples
 
 # Format code
 black src/rlm tests examples
+
+# Build the source distribution and wheel
+python -m build
 ```
+
+GitHub Actions runs these gates across Python 3.9-3.12 on Linux, plus Python 3.12 on macOS and
+Windows. It also installs the built wheel and runs the offline demo.
 
 ## Architecture
 
 ```
 RLM
 ├── Core (async completion logic)
+├── Run State (per-invocation budget, usage, and trajectory)
 ├── REPL Executor (restricted subprocess, persistent state, hard step timeout)
 ├── Prompt Builder (system prompts)
 └── Parser (extract FINAL() answers)

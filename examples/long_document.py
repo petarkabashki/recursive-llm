@@ -2,6 +2,7 @@
 
 from rlm import RLM
 
+
 # Generate a realistic long document (simulating a research paper or book)
 def generate_long_document():
     """Generate a long document for testing."""
@@ -62,11 +63,7 @@ def main():
     print()
 
     # Initialize RLM
-    rlm = RLM(
-        model="gpt-5-mini",
-        max_iterations=20,
-        temperature=0.5
-    )
+    rlm = RLM(model="gpt-5-mini", max_iterations=20, temperature=0.5)
 
     # Complex queries that require understanding the whole document
     queries = [
@@ -85,8 +82,10 @@ def main():
             result = rlm.complete(query, document)
 
             print(f"Answer: {result}")
-            print(f"Performance: {rlm.stats['llm_calls']} LLM calls, "
-                  f"{rlm.stats['iterations']} iterations")
+            print(
+                f"Performance: {rlm.stats['llm_calls']} LLM calls, "
+                f"{rlm.stats['iterations']} iterations"
+            )
             print("-" * 80)
             print()
 

@@ -30,7 +30,7 @@ Total: $6.6M
 
     with REPLExecutor() as repl:
         extraction_code = """
-revenues = re.findall(r'\\$([\\d.]+)M', context)
+revenues = re.findall(r'Q\\d Revenue: \\$([\\d.]+)M', context)
 print(f"Found revenues: {revenues}")
 """
         print("Code:")

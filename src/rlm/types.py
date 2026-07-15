@@ -21,7 +21,15 @@ class RLMConfig(TypedDict, total=False):
     max_iterations: int
     repl_timeout: float
     max_output_chars: int
+    repl_memory_limit_mb: Optional[int]
+    repl_cpu_time_limit_seconds: Optional[int]
+    repl_max_open_files: Optional[int]
     max_concurrent_subcalls: int
+    max_total_calls: Optional[int]
+    max_total_tokens: Optional[int]
+    max_total_cost_usd: Optional[float]
+    max_elapsed_seconds: Optional[float]
+    capture_trajectory_content: bool
     temperature: float
     timeout: int
 
@@ -38,12 +46,3 @@ class REPLEnvironment(TypedDict, total=False):
     llm_query_batched: Callable[[List[str], Optional[List[str]]], List[str]]
     rlm_query_batched: Callable[[List[str], Optional[List[str]]], List[str]]
     re: Any
-
-
-class CompletionResult(TypedDict):
-    """Result from RLM completion."""
-
-    answer: str
-    iterations: int
-    depth: int
-    llm_calls: int
